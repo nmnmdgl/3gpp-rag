@@ -1,0 +1,38 @@
+[
+  {
+    "document_id": "21905-j20",
+    "spec_number": "TR 21.905",
+    "document_type": "TR",
+    "title": "GSM, UMTS, LTE, 5G, Vocabulary",
+    "version": "",
+    "release": "19",
+    "source_file": "21905-j20.docx"
+  },
+  {
+    "document_id": "23501-k20",
+    "spec_number": "23501-k20",
+    "document_type": "",
+    "title": "Foreword\t24",
+    "version": "",
+    "release": "",
+    "source_file": "23501-k20.docx"
+  },
+  {
+    "document_id": "23502-k20",
+    "spec_number": "23502-k20",
+    "document_type": "",
+    "title": "Foreword\t28",
+    "version": "",
+    "release": "98",
+    "source_file": "23502-k20.docx"
+  },
+  {
+    "document_id": "38300-fn0",
+    "spec_number": "TS 38.300",
+    "document_type": "TS",
+    "title": "NR; NR and NG-RAN Overall Description;",
+    "version": "",
+    "release": "15",
+    "source_file": "38300-fn0.docx"
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {"id":"Q001","question":"What is the role of the UPF?","answerable":true,"expected_sources":[{"spec":"TS 23.501","clause":"5.34.6.1"},{"spec":"TS 23.501","clause":"5.8.5.12"},{"spec":"TS 23.502","clause":"4.15.4.5.2"}]},
+  {"id":"Q002","question":"What is the architecture of the 5G System?","answerable":true,"expected_sources":[{"spec":"TS 23.501","clause":"1"},{"spec":"TS 23.501","clause":"4.1"}]},
+  {"id":"Q003","question":"What is the role of the AMF in the 5G System?","answerable":true,"expected_sources":[]},
+  {"id":"Q004","question":"What is the role of the SMF?","answerable":true,"expected_sources":[]},
+  {"id":"Q005","question":"What is network slicing in the 5G System?","answerable":true,"expected_sources":[]},
+  {"id":"Q006","question":"How does the NG-RAN support network slicing?","answerable":true,"expected_sources":[]},
+  {"id":"Q007","question":"What is the purpose of the Non-Access Stratum (NAS)?","answerable":true,"expected_sources":[]},
+  {"id":"Q008","question":"What does the term NR mean in 3GPP terminology?","answerable":true,"expected_sources":[]},
+  {"id":"Q009","question":"What is the purpose of the Npcf_PolicyAuthorization_Delete service operation?","answerable":true,"expected_sources":[{"spec":"TS 23.502","clause":"5.2.5.3.4"}]},
+  {"id":"Q010","question":"What information can an AF request contain when interacting with the PCF or NEF?","answerable":true,"expected_sources":[{"spec":"TS 23.501","clause":"5.6.7"}]},
+  {"id":"Q011","question":"What is the role of the PCF in determining QoS parameters from an AF request?","answerable":true,"expected_sources":[]},
+  {"id":"Q012","question":"How is an AMF selected for initial access when the UE provides NSSAI?","answerable":true,"expected_sources":[]},
+  {"id":"Q013","question":"What exact NAS timer value is specified for a procedure that is not described in the supplied documents?","answerable":false,"expected_sources":[]},
+  {"id":"Q014","question":"What is the exact 6G Core Network architecture defined by 3GPP in these documents?","answerable":false,"expected_sources":[]},
+  {"id":"Q015","question":"What is the exact 3GPP TS 24.501 timer value for T3510?","answerable":false,"expected_sources":[]},
+  {"id":"Q016","question":"What is the exact 5QI value for an application not specified in the supplied documents?","answerable":false,"expected_sources":[]},
+  {"id":"Q017","question":"What is the exact charging tariff defined by the operator for this 5G network?","answerable":false,"expected_sources":[]},
+  {"id":"Q018","question":"What is the implementation source code used by a commercial AMF vendor?","answerable":false,"expected_sources":[]},
+  {"id":"Q019","question":"What is the exact hardware model of the UPF used by a specific operator?","answerable":false,"expected_sources":[]},
+  {"id":"Q020","question":"What is the exact latency of a 5G network deployed in Delhi?","answerable":false,"expected_sources":[]}
+]

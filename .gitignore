@@ -1,0 +1,107 @@
+# =========================================================
+# ENVIRONMENT / SECRETS
+# =========================================================
+
+.env
+.env.*
+!.env.example
+
+
+# =========================================================
+# PYTHON
+# =========================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Test / coverage caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checker / tooling caches
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+
+# =========================================================
+# IDE / EDITOR
+# =========================================================
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
+# =========================================================
+# GIT
+# =========================================================
+
+.git/
+
+
+# =========================================================
+# RAG / QDRANT RUNTIME DATA
+# =========================================================
+
+# Local Qdrant database
+data/qdrant/
+
+# Qdrant backups
+data/qdrant.backup_before_cleanup/
+
+
+# =========================================================
+# GENERATED / BACKUP INDEX FILES
+# =========================================================
+
+# BM25 backup files
+data/indexes/*.backup.pkl
+data/indexes/*.before_metadata_repair.pkl
+
+# Processed chunk backups
+data/processed/chunks/*.backup.json
+
+
+# =========================================================
+# GENERATED EVALUATION OUTPUT
+# =========================================================
+
+data/evaluation/results/
+evaluation/results/
+
+# =========================================================
+# KEEP THESE RAG ARTIFACTS TRACKED
+# =========================================================
+#
+# The following are intentionally NOT ignored:
+#
+# data/processed/chunks/chunks.json
+# data/processed/embeddings/embeddings.npy
+# data/indexes/bm25.pkl
+# data/processed/manifest.json
+#
+# =========================================================
