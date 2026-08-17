@@ -55,23 +55,7 @@ class RAGState(TypedDict, total=False):
 
 
 # =========================================================
-# LAZY COMPONENT INITIALIZATION
-# =========================================================
-#
-# IMPORTANT:
-# Do NOT initialize Retriever() or get_llm() at module level.
-#
-# Retriever() loads:
-#   - Qdrant
-#   - BM25
-#   - embedding model
-#   - reranker
-#
-# Those operations are intentionally delayed until the
-# first actual RAG request.
-#
-# lru_cache(maxsize=1) ensures that after initialization,
-# the same objects are reused for subsequent requests.
+# LAZY RETRIEVER
 # =========================================================
 
 @lru_cache(maxsize=1)
@@ -82,10 +66,10 @@ def get_retriever():
     print("=" * 70)
 
     retriever = Retriever(
-        dense_k=50,
-        bm25_k=50,
-        final_k=50,
-        rerank_k=20,
+        dense_k=12,
+        bm25_k=12,
+        final_k=8,
+        rerank_k=5,
     )
 
     print("=" * 70)
@@ -95,17 +79,21 @@ def get_retriever():
     return retriever
 
 
+# =========================================================
+# LAZY LLM
+# =========================================================
+
 @lru_cache(maxsize=1)
 def get_rag_llm():
 
     print("=" * 70)
-    print("Initializing LLM...")
+    print("Initializing RAG LLM...")
     print("=" * 70)
 
     llm = get_llm()
 
     print("=" * 70)
-    print("LLM initialized successfully.")
+    print("RAG LLM initialized successfully.")
     print("=" * 70)
 
     return llm
@@ -121,15 +109,28 @@ def retrieve_node(
 
     question = state["question"]
 
+    print("=" * 70)
+    print("RAG RETRIEVAL")
+    print(f"Question: {question}")
+    print("=" * 70)
+
     retriever = get_retriever()
 
     documents = retriever.retrieve(
         question
     )
 
+    print(
+        f"Retrieved documents: {len(documents)}"
+    )
+
     context = format_context(
         documents,
-        max_documents=12,
+        max_documents=8,
+    )
+
+    print(
+        f"Context length: {len(context)} characters"
     )
 
     return {
@@ -151,14 +152,19 @@ def evidence_node(
         [],
     )
 
-    # Only reject if retrieval returned nothing.
-    #
-    # Do NOT reject based on reranker score here.
-    #
-    # The LLM + citation validator are responsible for deciding
-    # whether the retrieved evidence actually supports an answer.
+    print("=" * 70)
+    print("EVIDENCE CHECK")
+    print(
+        f"Documents available: {len(documents)}"
+    )
+    print("=" * 70)
 
     if not documents:
+
+        print(
+            "No documents retrieved. "
+            "Abstaining."
+        )
 
         return {
             "abstained": True,
@@ -182,16 +188,38 @@ def generate_node(
 
     if state.get("abstained"):
 
+        print(
+            "Generation skipped because "
+            "pipeline is abstaining."
+        )
+
         return {}
 
-    prompt = USER_PROMPT.format(
-        question=state["question"],
-        context=state["context"],
+    question = state["question"]
+
+    context = state.get(
+        "context",
+        "",
     )
+
+    print("=" * 70)
+    print("RAG GENERATION")
+    print(f"Question: {question}")
+    print(
+        f"Context length: {len(context)} characters"
+    )
+    print("=" * 70)
 
     llm = get_rag_llm()
 
+    prompt = USER_PROMPT.format(
+        question=question,
+        context=context,
+    )
+
     try:
+
+        print("Calling LLM...")
 
         response = llm.invoke(
             [
@@ -208,10 +236,12 @@ def generate_node(
 
     except Exception as exc:
 
+        print("=" * 70)
+        print("LLM ERROR")
         print(
-            "LLM ERROR:",
-            repr(exc),
+            f"{type(exc).__name__}: {exc}"
         )
+        print("=" * 70)
 
         return {
             "answer": "INSUFFICIENT_EVIDENCE",
@@ -232,7 +262,15 @@ def generate_node(
         or ""
     ).strip()
 
+    print(
+        f"LLM response length: {len(answer)}"
+    )
+
     if not answer:
+
+        print(
+            "LLM returned an empty response."
+        )
 
         return {
             "answer": "INSUFFICIENT_EVIDENCE",
@@ -240,6 +278,10 @@ def generate_node(
             "grounded": False,
             "reason": "empty_llm_response",
         }
+
+    print("=" * 70)
+    print("LLM GENERATION COMPLETE")
+    print("=" * 70)
 
     return {
         "answer": answer,
@@ -269,11 +311,25 @@ def citation_node(
         [],
     )
 
+    print("=" * 70)
+    print("CITATION VALIDATION")
+    print(
+        f"Answer length: {len(answer)}"
+    )
+    print(
+        f"Documents: {len(documents)}"
+    )
+    print("=" * 70)
+
     # -----------------------------------------------------
     # Explicit LLM abstention
     # -----------------------------------------------------
 
     if is_abstention(answer):
+
+        print(
+            "LLM explicitly abstained."
+        )
 
         return {
             "grounded": False,
@@ -283,19 +339,45 @@ def citation_node(
         }
 
     # -----------------------------------------------------
-    # Validate
+    # Validate citations
     # -----------------------------------------------------
 
-    result = validate_citations(
-        answer,
-        documents,
-    )
+    try:
+
+        result = validate_citations(
+            answer,
+            documents,
+        )
+
+    except Exception as exc:
+
+        print("=" * 70)
+        print("CITATION VALIDATION ERROR")
+        print(
+            f"{type(exc).__name__}: {exc}"
+        )
+        print("=" * 70)
+
+        return {
+            "grounded": False,
+            "abstained": True,
+            "answer": "INSUFFICIENT_EVIDENCE",
+            "reason": (
+                "citation_validation_error:"
+                f"{type(exc).__name__}"
+            ),
+            "citation_check": {},
+        }
 
     # -----------------------------------------------------
     # No citations
     # -----------------------------------------------------
 
     if result["citation_count"] == 0:
+
+        print(
+            "No citations found."
+        )
 
         return {
             "grounded": False,
@@ -311,6 +393,10 @@ def citation_node(
 
     if result["invalid_citations"]:
 
+        print(
+            "Invalid citations detected."
+        )
+
         return {
             "grounded": False,
             "abstained": True,
@@ -322,6 +408,10 @@ def citation_node(
     # -----------------------------------------------------
     # Success
     # -----------------------------------------------------
+
+    print(
+        "Citation validation successful."
+    )
 
     return {
         "grounded": True,
@@ -341,7 +431,15 @@ def final_node(
 
     if state.get("grounded"):
 
+        print("=" * 70)
+        print("RAG REQUEST SUCCESSFUL")
+        print("=" * 70)
+
         return {}
+
+    print("=" * 70)
+    print("FINAL SAFETY GATE: ABSTAINING")
+    print("=" * 70)
 
     return {
         "answer": "INSUFFICIENT_EVIDENCE",
@@ -365,14 +463,22 @@ def evidence_router(
 
 
 # =========================================================
-# GRAPH
+# GRAPH BUILDER
 # =========================================================
 
 def build_graph():
 
+    print("=" * 70)
+    print("Building RAG graph...")
+    print("=" * 70)
+
     graph = StateGraph(
         RAGState
     )
+
+    # -----------------------------------------------------
+    # Nodes
+    # -----------------------------------------------------
 
     graph.add_node(
         "retrieve",
@@ -399,15 +505,27 @@ def build_graph():
         final_node,
     )
 
+    # -----------------------------------------------------
+    # START
+    # -----------------------------------------------------
+
     graph.add_edge(
         START,
         "retrieve",
     )
 
+    # -----------------------------------------------------
+    # RETRIEVE -> EVIDENCE
+    # -----------------------------------------------------
+
     graph.add_edge(
         "retrieve",
         "evidence",
     )
+
+    # -----------------------------------------------------
+    # EVIDENCE ROUTING
+    # -----------------------------------------------------
 
     graph.add_conditional_edges(
         "evidence",
@@ -418,19 +536,37 @@ def build_graph():
         },
     )
 
+    # -----------------------------------------------------
+    # GENERATE -> CITATION
+    # -----------------------------------------------------
+
     graph.add_edge(
         "generate",
         "citation",
     )
 
+    # -----------------------------------------------------
+    # CITATION -> FINAL
+    # -----------------------------------------------------
+
     graph.add_edge(
         "citation",
         "final",
     )
+
+    # -----------------------------------------------------
+    # FINAL -> END
+    # -----------------------------------------------------
 
     graph.add_edge(
         "final",
         END,
     )
 
-    return graph.compile()
+    compiled_graph = graph.compile()
+
+    print("=" * 70)
+    print("RAG graph built successfully.")
+    print("=" * 70)
+
+    return compiled_graph
