@@ -1,7 +1,5 @@
-# backend/api/routes.py
-
-import asyncio
 from typing import Any, Dict, List
+import threading
 
 from fastapi import APIRouter, HTTPException
 
@@ -21,56 +19,59 @@ router = APIRouter(
 
 _graph = None
 _graph_error = None
-_graph_lock = asyncio.Lock()
+
+_graph_lock = threading.Lock()
+_initialization_started = False
 
 
-async def initialize_graph():
+def initialize_graph_background():
     global _graph
     global _graph_error
+    global _initialization_started
 
-    if _graph is not None:
-        return _graph
+    with _graph_lock:
+        if _initialization_started:
+            return
 
-    async with _graph_lock:
+        _initialization_started = True
 
-        if _graph is not None:
-            return _graph
+    print("=" * 70, flush=True)
+    print("Background RAG initialization started", flush=True)
+    print("=" * 70, flush=True)
 
-        try:
-            print(
-                "Initializing RAG graph...",
-                flush=True,
-            )
+    try:
+        print(
+            "Initializing RAG graph...",
+            flush=True,
+        )
 
-            from src.generation.graph import build_graph
+        from src.generation.graph import build_graph
 
-            graph = await asyncio.to_thread(
-                build_graph
-            )
+        graph = build_graph()
 
-            _graph = graph
-            _graph_error = None
+        _graph = graph
+        _graph_error = None
 
-            print(
-                "RAG graph initialized successfully.",
-                flush=True,
-            )
+        print("=" * 70, flush=True)
+        print(
+            "RAG graph initialized successfully.",
+            flush=True,
+        )
+        print("=" * 70, flush=True)
 
-            return _graph
+    except Exception as exc:
+        _graph_error = repr(exc)
 
-        except Exception as exc:
-            _graph_error = repr(exc)
-
-            print(
-                "RAG graph initialization failed:",
-                flush=True,
-            )
-            print(
-                repr(exc),
-                flush=True,
-            )
-
-            raise
+        print("=" * 70, flush=True)
+        print(
+            "WARNING: RAG graph initialization failed:",
+            flush=True,
+        )
+        print(
+            repr(exc),
+            flush=True,
+        )
+        print("=" * 70, flush=True)
 
 
 def normalize_document_name(
@@ -213,7 +214,6 @@ def health():
             "status": "ok",
             "service": "3GPP RAG API",
             "rag": "error",
-            "error": _graph_error,
         }
 
     return {
@@ -281,7 +281,7 @@ def info():
     "/chat",
     response_model=ChatResponse,
 )
-async def chat(
+def chat(
     request: ChatRequest,
 ):
 
@@ -293,14 +293,34 @@ async def chat(
             detail="Question cannot be empty.",
         )
 
-    try:
-        graph = await initialize_graph()
+    # IMPORTANT:
+    # Never initialize the RAG system from the frontend request.
+    # If models/indexes are still loading, return immediately.
+    if _graph is None:
 
-        result = await asyncio.to_thread(
-            graph.invoke,
+        if _graph_error is not None:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "RAG initialization failed. "
+                    "Check backend logs."
+                ),
+            )
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "RAG system is still initializing. "
+                "Please try again shortly."
+            ),
+        )
+
+    try:
+
+        result = _graph.invoke(
             {
                 "question": question,
-            },
+            }
         )
 
     except Exception as exc:

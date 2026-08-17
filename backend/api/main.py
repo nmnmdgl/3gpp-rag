@@ -1,42 +1,30 @@
-# backend/api/main.py
-
 from contextlib import asynccontextmanager
-import asyncio
 import os
+import threading
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import initialize_graph, router
-
-
-async def initialize_rag():
-    print("=" * 70, flush=True)
-    print("Background RAG initialization started", flush=True)
-    print("=" * 70, flush=True)
-
-    try:
-        await initialize_graph()
-
-        print("=" * 70, flush=True)
-        print("RAG graph initialized successfully.", flush=True)
-        print("=" * 70, flush=True)
-
-    except Exception as exc:
-        print("=" * 70, flush=True)
-        print("WARNING: Background RAG initialization failed:", flush=True)
-        print(repr(exc), flush=True)
-        print("=" * 70, flush=True)
+from .routes import initialize_graph_background, router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("=" * 70, flush=True)
     print("Starting 3GPP RAG backend", flush=True)
-    print("=" * 70, flush=True)
+    print("=" * 70)
 
-    asyncio.create_task(initialize_rag())
+    # Start RAG initialization in a completely separate thread.
+    # FastAPI startup does NOT wait for the RAG models/indexes.
+    thread = threading.Thread(
+        target=initialize_graph_background,
+        daemon=True,
+        name="rag-initializer",
+    )
 
+    thread.start()
+
+    # Return immediately so Railway can reach /api/health.
     yield
 
     print(
