@@ -1,4 +1,5 @@
 from typing import TypedDict, List, Dict
+from functools import lru_cache
 
 from langgraph.graph import (
     StateGraph,
@@ -54,17 +55,60 @@ class RAGState(TypedDict, total=False):
 
 
 # =========================================================
-# COMPONENTS
+# LAZY COMPONENT INITIALIZATION
+# =========================================================
+#
+# IMPORTANT:
+# Do NOT initialize Retriever() or get_llm() at module level.
+#
+# Retriever() loads:
+#   - Qdrant
+#   - BM25
+#   - embedding model
+#   - reranker
+#
+# Those operations are intentionally delayed until the
+# first actual RAG request.
+#
+# lru_cache(maxsize=1) ensures that after initialization,
+# the same objects are reused for subsequent requests.
 # =========================================================
 
-retriever = Retriever(
-    dense_k=50,
-    bm25_k=50,
-    final_k=50,
-    rerank_k=20,
-)
+@lru_cache(maxsize=1)
+def get_retriever():
 
-llm = get_llm()
+    print("=" * 70)
+    print("Initializing RAG retriever...")
+    print("=" * 70)
+
+    retriever = Retriever(
+        dense_k=50,
+        bm25_k=50,
+        final_k=50,
+        rerank_k=20,
+    )
+
+    print("=" * 70)
+    print("RAG retriever initialized successfully.")
+    print("=" * 70)
+
+    return retriever
+
+
+@lru_cache(maxsize=1)
+def get_rag_llm():
+
+    print("=" * 70)
+    print("Initializing LLM...")
+    print("=" * 70)
+
+    llm = get_llm()
+
+    print("=" * 70)
+    print("LLM initialized successfully.")
+    print("=" * 70)
+
+    return llm
 
 
 # =========================================================
@@ -76,6 +120,8 @@ def retrieve_node(
 ):
 
     question = state["question"]
+
+    retriever = get_retriever()
 
     documents = retriever.retrieve(
         question
@@ -143,6 +189,8 @@ def generate_node(
         context=state["context"],
     )
 
+    llm = get_rag_llm()
+
     try:
 
         response = llm.invoke(
@@ -159,6 +207,11 @@ def generate_node(
         )
 
     except Exception as exc:
+
+        print(
+            "LLM ERROR:",
+            repr(exc),
+        )
 
         return {
             "answer": "INSUFFICIENT_EVIDENCE",
