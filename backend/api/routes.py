@@ -54,29 +54,63 @@ def initialize_graph_background():
 
     try:
 
-        print("Initializing RAG graph...")
+        print("Initializing RAG graph...", flush=True)
 
-        from src.generation.graph import build_graph
+        # NOTE: build_graph() only builds the LangGraph state machine.
+        # It does NOT load the embedding model, Qdrant, BM25, or the
+        # reranker -- those are behind lazy @lru_cache accessors
+        # (get_retriever / get_rag_llm) that previously only ran on
+        # the first /api/chat request, inside the request thread.
+        # That is what produced the 502s: the heaviest, most
+        # memory-hungry initialization in the whole app was happening
+        # unsynchronized, under a live user request, instead of here
+        # in a single background thread at startup.
+        from src.generation.graph import (
+            build_graph,
+            get_retriever,
+            get_rag_llm,
+        )
 
         graph = build_graph()
+
+        print("=" * 70, flush=True)
+        print(
+            "Warming up retriever "
+            "(embedding model + Qdrant + BM25 + reranker)...",
+            flush=True,
+        )
+        print("=" * 70, flush=True)
+
+        # Force the lazy singletons to materialize now, while nothing
+        # else is competing for memory/CPU and while /api/health still
+        # correctly reports "initializing" instead of "ready".
+        get_retriever()
+
+        print("Retriever warm-up complete.", flush=True)
+
+        print("Warming up LLM client...", flush=True)
+
+        get_rag_llm()
+
+        print("LLM warm-up complete.", flush=True)
 
         with _graph_lock:
             _graph = graph
             _graph_error = None
 
-        print("=" * 70)
-        print("RAG graph initialized successfully.")
-        print("=" * 70)
+        print("=" * 70, flush=True)
+        print("RAG graph initialized successfully.", flush=True)
+        print("=" * 70, flush=True)
 
     except Exception as exc:
 
         with _graph_lock:
             _graph_error = repr(exc)
 
-        print("=" * 70)
-        print("RAG graph initialization failed:")
-        print(repr(exc))
-        print("=" * 70)
+        print("=" * 70, flush=True)
+        print("RAG graph initialization failed:", flush=True)
+        print(repr(exc), flush=True)
+        print("=" * 70, flush=True)
 
         traceback.print_exc()
 
