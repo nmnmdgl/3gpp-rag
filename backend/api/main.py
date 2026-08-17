@@ -19,7 +19,8 @@ async def lifespan(app: FastAPI):
         print("RAG graph initialized successfully.")
     except Exception as exc:
         print("WARNING: RAG graph initialization failed:")
-        print(repr(exc))
+        import traceback
+        traceback.print_exc()
         print(
             "The API will start, but /api/chat may fail until "
             "the underlying RAG configuration is fixed."
