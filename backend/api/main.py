@@ -1,34 +1,48 @@
+# backend/api/main.py
+
 from contextlib import asynccontextmanager
+import asyncio
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import get_graph, router
+from .routes import initialize_graph, router
+
+
+async def initialize_rag():
+    print("=" * 70, flush=True)
+    print("Background RAG initialization started", flush=True)
+    print("=" * 70, flush=True)
+
+    try:
+        await initialize_graph()
+
+        print("=" * 70, flush=True)
+        print("RAG graph initialized successfully.", flush=True)
+        print("=" * 70, flush=True)
+
+    except Exception as exc:
+        print("=" * 70, flush=True)
+        print("WARNING: Background RAG initialization failed:", flush=True)
+        print(repr(exc), flush=True)
+        print("=" * 70, flush=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("=" * 70)
-    print("Starting 3GPP RAG backend")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print("Starting 3GPP RAG backend", flush=True)
+    print("=" * 70, flush=True)
 
-    try:
-        print("Initializing RAG graph...")
-        get_graph()
-        print("RAG graph initialized successfully.")
-    except Exception as exc:
-        print("WARNING: RAG graph initialization failed:")
-        import traceback
-        traceback.print_exc()
-        print(
-            "The API will start, but /api/chat may fail until "
-            "the underlying RAG configuration is fixed."
-        )
+    asyncio.create_task(initialize_rag())
 
     yield
 
-    print("Shutting down 3GPP RAG backend...")
+    print(
+        "Shutting down 3GPP RAG backend...",
+        flush=True,
+    )
 
 
 app = FastAPI(
@@ -41,9 +55,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Set FRONTEND_URL on Render to the deployed Vercel URL.
-# Multiple comma-separated origins are supported.
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+frontend_url = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:3000",
+)
 
 allowed_origins = [
     origin.strip()
@@ -54,6 +70,7 @@ allowed_origins = [
 if "http://localhost:3000" not in allowed_origins:
     allowed_origins.append("http://localhost:3000")
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -61,6 +78,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 app.include_router(router)
 
