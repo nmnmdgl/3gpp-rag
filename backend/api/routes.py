@@ -1,5 +1,4 @@
 from typing import Any, Dict, List
-import threading
 
 from fastapi import APIRouter, HTTPException
 
@@ -17,62 +16,63 @@ router = APIRouter(
 )
 
 
+# =========================================================
+# GLOBAL RAG GRAPH
+# =========================================================
+
 _graph = None
-_graph_error = None
-
-_graph_lock = threading.Lock()
-_initialization_started = False
 
 
-def initialize_graph_background():
+def get_graph():
+    """
+    Return the initialized RAG graph.
+
+    The graph is initialized by the background
+    initialization process in main.py.
+    """
+
     global _graph
-    global _graph_error
-    global _initialization_started
 
-    with _graph_lock:
-        if _initialization_started:
-            return
-
-        _initialization_started = True
-
-    print("=" * 70, flush=True)
-    print("Background RAG initialization started", flush=True)
-    print("=" * 70, flush=True)
-
-    try:
+    if _graph is None:
         print(
-            "Initializing RAG graph...",
+            "get_graph(): graph is not initialized. "
+            "Building graph now...",
             flush=True,
         )
 
         from src.generation.graph import build_graph
 
-        graph = build_graph()
+        _graph = build_graph()
 
-        _graph = graph
-        _graph_error = None
-
-        print("=" * 70, flush=True)
         print(
-            "RAG graph initialized successfully.",
+            "get_graph(): graph built successfully.",
             flush=True,
         )
-        print("=" * 70, flush=True)
 
-    except Exception as exc:
-        _graph_error = repr(exc)
+    return _graph
 
-        print("=" * 70, flush=True)
-        print(
-            "WARNING: RAG graph initialization failed:",
-            flush=True,
-        )
-        print(
-            repr(exc),
-            flush=True,
-        )
-        print("=" * 70, flush=True)
 
+def set_graph(graph):
+    """
+    Store the initialized RAG graph.
+
+    Called by the background initialization
+    process in main.py.
+    """
+
+    global _graph
+
+    _graph = graph
+
+    print(
+        "set_graph(): RAG graph stored successfully.",
+        flush=True,
+    )
+
+
+# =========================================================
+# DOCUMENT NAME NORMALIZATION
+# =========================================================
 
 def normalize_document_name(
     document: str,
@@ -88,11 +88,16 @@ def normalize_document_name(
     value = str(document).strip()
 
     for key, name in mapping.items():
+
         if value.startswith(key):
             return name
 
     return value
 
+
+# =========================================================
+# CITATIONS
+# =========================================================
 
 def extract_citations(
     citation_check: Dict[str, Any],
@@ -118,16 +123,24 @@ def extract_citations(
     return citations
 
 
+# =========================================================
+# SOURCES
+# =========================================================
+
 def extract_sources(
     documents: List[Dict[str, Any]],
 ) -> List[Source]:
 
     sources = []
+
     seen = set()
 
     for document in documents:
 
-        if not isinstance(document, dict):
+        if not isinstance(
+            document,
+            dict,
+        ):
             continue
 
         raw_document = (
@@ -170,15 +183,18 @@ def extract_sources(
         seen.add(key)
 
         try:
+
             numeric_score = (
                 float(score)
                 if score is not None
                 else None
             )
+
         except (
             TypeError,
             ValueError,
         ):
+
             numeric_score = None
 
         sources.append(
@@ -199,29 +215,23 @@ def extract_sources(
     return sources
 
 
+# =========================================================
+# HEALTH
+# =========================================================
+
 @router.get("/health")
 def health():
-
-    if _graph is not None:
-        return {
-            "status": "ok",
-            "service": "3GPP RAG API",
-            "rag": "ready",
-        }
-
-    if _graph_error is not None:
-        return {
-            "status": "ok",
-            "service": "3GPP RAG API",
-            "rag": "error",
-        }
 
     return {
         "status": "ok",
         "service": "3GPP RAG API",
-        "rag": "initializing",
+        "graph_initialized": _graph is not None,
     }
 
+
+# =========================================================
+# INFO
+# =========================================================
 
 @router.get("/info")
 def info():
@@ -274,8 +284,13 @@ def info():
             "Abstention",
             "Groundedness validation",
         ],
+        "graph_initialized": _graph is not None,
     }
 
+
+# =========================================================
+# CHAT
+# =========================================================
 
 @router.post(
     "/chat",
@@ -285,51 +300,178 @@ def chat(
     request: ChatRequest,
 ):
 
+    print("=" * 70, flush=True)
+
+    print(
+        "CHAT REQUEST RECEIVED",
+        flush=True,
+    )
+
+    print(
+        f"Question: {request.question}",
+        flush=True,
+    )
+
+    print(
+        f"Conversation ID: "
+        f"{request.conversation_id}",
+        flush=True,
+    )
+
+    print(
+        f"Graph initialized before request: "
+        f"{_graph is not None}",
+        flush=True,
+    )
+
+    print("=" * 70, flush=True)
+
+    # -----------------------------------------------------
+    # QUESTION VALIDATION
+    # -----------------------------------------------------
+
     question = request.question.strip()
 
     if not question:
+
+        print(
+            "CHAT ERROR: Empty question.",
+            flush=True,
+        )
+
         raise HTTPException(
             status_code=400,
             detail="Question cannot be empty.",
         )
 
-    # IMPORTANT:
-    # Never initialize the RAG system from the frontend request.
-    # If models/indexes are still loading, return immediately.
-    if _graph is None:
-
-        if _graph_error is not None:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "RAG initialization failed. "
-                    "Check backend logs."
-                ),
-            )
-
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "RAG system is still initializing. "
-                "Please try again shortly."
-            ),
-        )
+    # -----------------------------------------------------
+    # GET GRAPH
+    # -----------------------------------------------------
 
     try:
 
-        result = _graph.invoke(
+        print(
+            "STEP 1: Calling get_graph()...",
+            flush=True,
+        )
+
+        graph = get_graph()
+
+        print(
+            "STEP 2: get_graph() returned.",
+            flush=True,
+        )
+
+        print(
+            f"Graph object type: "
+            f"{type(graph).__name__}",
+            flush=True,
+        )
+
+    except Exception as exc:
+
+        print("=" * 70, flush=True)
+
+        print(
+            "GRAPH INITIALIZATION ERROR",
+            flush=True,
+        )
+
+        print(
+            f"Exception type: "
+            f"{type(exc).__name__}",
+            flush=True,
+        )
+
+        print(
+            f"Exception: {repr(exc)}",
+            flush=True,
+        )
+
+        import traceback
+
+        traceback.print_exc()
+
+        print("=" * 70, flush=True)
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "The RAG graph could not be initialized."
+            ),
+        ) from exc
+
+    # -----------------------------------------------------
+    # GRAPH INVOCATION
+    # -----------------------------------------------------
+
+    try:
+
+        print(
+            "STEP 3: Starting graph.invoke()...",
+            flush=True,
+        )
+
+        result = graph.invoke(
             {
                 "question": question,
             }
         )
 
-    except Exception as exc:
-
         print(
-            "RAG ERROR:",
-            repr(exc),
+            "STEP 4: graph.invoke() COMPLETED.",
             flush=True,
         )
+
+        print(
+            f"Result type: "
+            f"{type(result).__name__}",
+            flush=True,
+        )
+
+        if isinstance(
+            result,
+            dict,
+        ):
+
+            print(
+                "Result keys: "
+                f"{list(result.keys())}",
+                flush=True,
+            )
+
+        else:
+
+            print(
+                "WARNING: Graph result is not a dict.",
+                flush=True,
+            )
+
+    except Exception as exc:
+
+        print("=" * 70, flush=True)
+
+        print(
+            "RAG ERROR DURING GRAPH INVOCATION",
+            flush=True,
+        )
+
+        print(
+            f"Exception type: "
+            f"{type(exc).__name__}",
+            flush=True,
+        )
+
+        print(
+            f"Exception: {repr(exc)}",
+            flush=True,
+        )
+
+        import traceback
+
+        traceback.print_exc()
+
+        print("=" * 70, flush=True)
 
         raise HTTPException(
             status_code=500,
@@ -338,6 +480,15 @@ def chat(
                 "processing the question."
             ),
         ) from exc
+
+    # -----------------------------------------------------
+    # RESPONSE EXTRACTION
+    # -----------------------------------------------------
+
+    print(
+        "STEP 5: Extracting answer...",
+        flush=True,
+    )
 
     answer = str(
         result.get(
@@ -367,6 +518,35 @@ def chat(
         )
     )
 
+    print(
+        f"Answer length: {len(answer)}",
+        flush=True,
+    )
+
+    print(
+        f"Grounded: {grounded}",
+        flush=True,
+    )
+
+    print(
+        f"Abstained: {abstained}",
+        flush=True,
+    )
+
+    print(
+        f"Reason: {reason}",
+        flush=True,
+    )
+
+    # -----------------------------------------------------
+    # CITATION DATA
+    # -----------------------------------------------------
+
+    print(
+        "STEP 6: Extracting citation data...",
+        flush=True,
+    )
+
     citation_check = (
         result.get(
             "citation_check",
@@ -383,16 +563,80 @@ def chat(
         or []
     )
 
-    return ChatResponse(
+    print(
+        f"Retrieved documents: "
+        f"{len(documents)}",
+        flush=True,
+    )
+
+    citations = extract_citations(
+        citation_check
+    )
+
+    print(
+        f"Extracted citations: "
+        f"{len(citations)}",
+        flush=True,
+    )
+
+    # -----------------------------------------------------
+    # SOURCE DATA
+    # -----------------------------------------------------
+
+    print(
+        "STEP 7: Extracting sources...",
+        flush=True,
+    )
+
+    sources = extract_sources(
+        documents
+    )
+
+    print(
+        f"Extracted sources: "
+        f"{len(sources)}",
+        flush=True,
+    )
+
+    # -----------------------------------------------------
+    # FINAL RESPONSE
+    # -----------------------------------------------------
+
+    print(
+        "STEP 8: Creating ChatResponse...",
+        flush=True,
+    )
+
+    response = ChatResponse(
         answer=answer,
         grounded=grounded,
         abstained=abstained,
         reason=reason,
-        citations=extract_citations(
-            citation_check
+        citations=citations,
+        sources=sources,
+        conversation_id=(
+            request.conversation_id
         ),
-        sources=extract_sources(
-            documents
-        ),
-        conversation_id=request.conversation_id,
     )
+
+    print(
+        "STEP 9: ChatResponse created successfully.",
+        flush=True,
+    )
+
+    print(
+        "=" * 70,
+        flush=True,
+    )
+
+    print(
+        "CHAT REQUEST COMPLETED SUCCESSFULLY",
+        flush=True,
+    )
+
+    print(
+        "=" * 70,
+        flush=True,
+    )
+
+    return response
